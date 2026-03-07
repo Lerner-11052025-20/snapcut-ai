@@ -1,0 +1,16 @@
+{
+    "rewrites": [
+        {
+            "source": "/webhook/(.*)",
+            "destination": "https://deep7204.app.n8n.cloud/webhook/$1"
+        },
+        {
+            "source": "/webhook-test/(.*)",
+            "destination": "https://deep7204.app.n8n.cloud/webhook-test/$1"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
+}
