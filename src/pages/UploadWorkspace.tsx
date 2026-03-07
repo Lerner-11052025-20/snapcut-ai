@@ -33,17 +33,53 @@ const UploadWorkspace = () => {
     }
   }, [location.search]);
 
-  // Load history from localStorage on mount
+  // Load history from localStorage on mount & Cleanup broken blobs
   useEffect(() => {
     const saved = localStorage.getItem("snapcut_history");
     if (saved) {
       try {
-        setHistory(JSON.parse(saved));
+        let items: HistoryItem[] = JSON.parse(saved);
+        // Migration: Remove any items using ephemeral blob URLs from older sessions
+        const cleaned = items.filter(item =>
+          !item.original.startsWith('blob:') &&
+          !item.result.startsWith('blob:')
+        );
+        if (cleaned.length !== items.length) {
+          localStorage.setItem("snapcut_history", JSON.stringify(cleaned));
+        }
+        setHistory(cleaned);
       } catch (e) {
         console.error("Failed to parse history", e);
       }
     }
   }, []);
+
+  // Listen for file passed from landing page
+  useEffect(() => {
+    if (location.state?.file) {
+      handleFile(location.state.file);
+      // Clear state so it doesn't re-trigger on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  const blobToDataURL = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
 
   const saveToHistory = (original: string, result: string) => {
     const newItem: HistoryItem = {
@@ -102,12 +138,12 @@ const UploadWorkspace = () => {
   }, [state]);
 
   const handleFile = useCallback(async (file: File) => {
-    // Show preview immediately
-    const previewUrl = URL.createObjectURL(file);
-    setPreview(previewUrl);
-    setState("uploading");
-
     try {
+      // Show preview and start upload
+      setState("uploading");
+      const base64 = await fileToBase64(file);
+      setPreview(base64);
+
       setState("processing");
 
       const formData = new FormData();
@@ -131,9 +167,9 @@ const UploadWorkspace = () => {
         const data = await response.json();
         resultUrl = data.url || data.secure_url || "";
       } else {
-        // Assume binary blob if it's not JSON
+        // Assume binary blob if it's not JSON - Convert to persistent data URL
         const blob = await response.blob();
-        resultUrl = URL.createObjectURL(blob);
+        resultUrl = await blobToDataURL(blob);
       }
 
       if (!resultUrl) {
@@ -141,8 +177,8 @@ const UploadWorkspace = () => {
       }
 
       setResult(resultUrl);
+      saveToHistory(base64, resultUrl);
       setState("done");
-      saveToHistory(previewUrl, resultUrl);
       toast.success("Background removed successfully!");
 
     } catch (err) {
@@ -152,23 +188,40 @@ const UploadWorkspace = () => {
     }
   }, []);
 
-  // Auto-load any image dropped on the landing page hero zone
+  // Unified effect to handle image passing from Landing Page
   useEffect(() => {
-    const pending = sessionStorage.getItem("pendingImage");
-    const pendingType = sessionStorage.getItem("pendingFileType") || "image/png";
-    const pendingName = sessionStorage.getItem("pendingFileName") || "image.png";
-    if (pending) {
-      sessionStorage.removeItem("pendingImage");
-      sessionStorage.removeItem("pendingFileName");
-      sessionStorage.removeItem("pendingFileType");
-      fetch(pending)
-        .then((r) => r.blob())
-        .then((blob) => {
+    const processPending = async () => {
+      // Priority 1: location state (Router navigation)
+      if (location.state?.file) {
+        const file = location.state.file;
+        window.history.replaceState({}, document.title);
+        handleFile(file);
+        return;
+      }
+
+      // Priority 2: Session Storage fallback
+      const pending = sessionStorage.getItem("pendingImage");
+      const pendingType = sessionStorage.getItem("pendingFileType") || "image/png";
+      const pendingName = sessionStorage.getItem("pendingFileName") || "image.png";
+
+      if (pending) {
+        sessionStorage.removeItem("pendingImage");
+        sessionStorage.removeItem("pendingFileName");
+        sessionStorage.removeItem("pendingFileType");
+
+        try {
+          const res = await fetch(pending);
+          const blob = await res.blob();
           const file = new File([blob], pendingName, { type: pendingType });
           handleFile(file);
-        });
-    }
-  }, [handleFile]);
+        } catch (e) {
+          console.error("Pending image restore failed", e);
+        }
+      }
+    };
+
+    processPending();
+  }, [location.state, handleFile]);
 
   const reset = () => {
     setState("idle");
@@ -358,15 +411,27 @@ const UploadWorkspace = () => {
                     </div>
 
                     <div className="pt-6 border-t border-white/5 space-y-4">
-                      <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white/40">Details</h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white/40">Details</h3>
+                        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 text-[10px] font-black uppercase tracking-widest border border-green-500/20">
+                          <div className="w-1 h-1 rounded-full bg-green-400 animate-pulse" />
+                          Done
+                        </span>
+                      </div>
+
                       <div className="space-y-3">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Original</span>
-                          <img src={preview!} alt="Source" className="h-10 w-10 rounded-lg object-cover opacity-60" />
+                        <div className="p-1 rounded-[1.2rem] bg-white/5 border border-white/5">
+                          <div className="relative aspect-video rounded-xl overflow-hidden border border-white/5 bg-[#050505]">
+                            <img src={preview!} alt="Source" className="w-full h-full object-contain p-2 transition-transform hover:scale-105 duration-500" />
+                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-white/10 z-20">
+                              <span className="text-[9px] font-black text-white uppercase tracking-widest">Source Image</span>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Status</span>
-                          <span className="text-green-400 font-bold uppercase tracking-widest">Completed</span>
+
+                        <div className="flex justify-between items-center px-1">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Processing Time</span>
+                          <span className="text-[10px] font-black text-white px-2 py-0.5 rounded bg-white/5 tracking-tighter">0.8s</span>
                         </div>
                       </div>
                     </div>
@@ -377,7 +442,12 @@ const UploadWorkspace = () => {
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Share Project</p>
                       <p className="text-xs text-white/60">Generate temporary link</p>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full bg-white/5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white"
+                      onClick={reset}
+                    >
                       <ArrowLeft className="rotate-180" size={16} />
                     </Button>
                   </div>
@@ -436,16 +506,27 @@ const UploadWorkspace = () => {
                         />
                         <img src={item.result} alt="History" className="relative z-10 max-h-full max-w-full object-contain filter drop-shadow-2xl" />
 
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                          <Button size="icon" variant="hero" className="rounded-full" onClick={() => downloadImage(item.result, `history-${item.id}.png`)}>
-                            <Download size={18} />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all duration-500 flex items-center justify-center gap-4 z-20">
+                          <Button
+                            size="icon"
+                            variant="hero"
+                            className="h-12 w-12 rounded-full shadow-glow opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 hover:scale-110 transition-all duration-300"
+                            onClick={(e) => { e.stopPropagation(); downloadImage(item.result, `snapcut-${item.id}.png`); }}
+                          >
+                            <Download size={24} />
                           </Button>
-                          <Button size="icon" variant="outline" className="rounded-full bg-white/10 border-white/10" onClick={() => {
-                            setResult(item.result);
-                            setPreview(item.original);
-                            setState("done");
-                          }}>
-                            <ArrowLeft className="rotate-180" size={18} />
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-12 w-12 rounded-full bg-white/10 border-white/10 shadow-xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 hover:scale-110 transition-all duration-300"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setResult(item.result);
+                              setPreview(item.original);
+                              setState("done");
+                            }}
+                          >
+                            <ArrowLeft className="rotate-180" size={24} />
                           </Button>
                         </div>
                       </div>
@@ -461,7 +542,7 @@ const UploadWorkspace = () => {
           )}
         </AnimatePresence>
       </main>
-    </div>
+    </div >
   );
 };
 
