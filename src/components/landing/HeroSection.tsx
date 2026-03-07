@@ -81,7 +81,7 @@ const HeroSection = () => {
             className="flex flex-wrap items-center justify-center gap-4 px-4"
           >
             <Button variant="hero" size="xl" className="w-full sm:w-auto min-w-[200px]" asChild>
-              <Link to="/upload">
+              <Link to="/dashboard">
                 Get Started Free
                 <Zap size={18} className="ml-2 fill-current" />
               </Link>

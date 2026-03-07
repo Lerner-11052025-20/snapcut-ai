@@ -9,7 +9,7 @@ const navLinks = [
   { label: "Features", href: "/#features" },
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Pricing", href: "/#pricing" },
-  { label: "History", href: "/upload?tab=history" },
+  { label: "Dashboard", href: "/dashboard" },
 ];
 
 const Navbar = () => {
@@ -39,7 +39,7 @@ const Navbar = () => {
             <Link to="/login">Sign In</Link>
           </Button>
           <Button variant="hero" size="sm" className="rounded-full px-6 text-[11px] font-black uppercase tracking-widest" asChild>
-            <Link to="/upload">Start Cutting</Link>
+            <Link to="/dashboard">Go to Dashboard</Link>
           </Button>
         </div>
 
