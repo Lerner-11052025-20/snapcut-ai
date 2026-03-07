@@ -21,7 +21,7 @@ const HeroSection = () => {
         // Handle gracefully
       }
       toast.success("AI model warming up...");
-      navigate("/app");
+      navigate("/upload");
     };
     reader.readAsDataURL(file);
   };
@@ -81,7 +81,7 @@ const HeroSection = () => {
             className="flex flex-wrap items-center justify-center gap-4 px-4"
           >
             <Button variant="hero" size="xl" className="w-full sm:w-auto min-w-[200px]" asChild>
-              <Link to="/app">
+              <Link to="/upload">
                 Get Started Free
                 <Zap size={18} className="ml-2 fill-current" />
               </Link>
