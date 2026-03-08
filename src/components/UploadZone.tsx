@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from "react";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 
 interface UploadZoneProps {
     onFile: (file: File) => void;
@@ -53,37 +54,42 @@ const UploadZone = ({ onFile, disabled = false, clickable = true }: UploadZonePr
     };
 
     return (
-        <div
+        <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
             onClick={clickable ? () => inputRef.current?.click() : undefined}
             className={`
-        relative rounded-3xl border-2 border-dashed transition-all duration-500 select-none overflow-hidden
-        ${clickable && !disabled ? "cursor-pointer hover:border-primary/40 glass-hover group hover:scale-[1.005] shadow-glow/10" : "glass"}
-        ${disabled ? "opacity-50 pointer-events-none" : "border-white/5 bg-white/[0.02]"}
-      `}
-            style={{ padding: "64px 32px" }}
+                relative w-full rounded-[2.5rem] border-[1.5px] border-dashed transition-all duration-500 select-none overflow-hidden group
+                ${clickable && !disabled
+                    ? "cursor-pointer border-blue-500/40 hover:border-blue-500/70 bg-[#050508] hover:bg-[#0a0a0f] shadow-[0_0_50px_rgba(59,130,246,0.03)] hover:shadow-[0_0_80px_rgba(59,130,246,0.08)]"
+                    : "border-white/10 bg-[#050505]"}
+                ${disabled ? "opacity-50 pointer-events-none" : ""}
+            `}
+            style={{ padding: "72px 32px" }}
         >
-            <div className="flex flex-col items-center gap-6 text-center">
-                {/* Circular icon container */}
-                <div className="relative group/icon">
-                    <div className="absolute h-16 w-16 rounded-full bg-primary/20 blur-xl group-hover/icon:bg-primary/30 transition-all duration-500 opacity-0 group-hover:opacity-100" />
-                    <div className="relative h-16 w-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:border-primary/50 transition-all duration-500 shadow-xl overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <Upload size={24} className="text-primary group-hover:scale-110 transition-transform duration-500" strokeWidth={2} />
+            <div className="flex flex-col items-center justify-center gap-6 text-center">
+
+                {/* Glowing Outer Ring + Icon */}
+                <div className="relative mb-2">
+                    <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-xl group-hover:bg-blue-500/40 transition-all duration-500" />
+                    <div className="relative h-[68px] w-[68px] rounded-full flex items-center justify-center border border-blue-500/30 bg-black/40 group-hover:border-blue-400 group-hover:bg-blue-500/10 transition-all duration-500 shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                        <Upload size={28} className="text-blue-400 group-hover:text-blue-300 group-hover:-translate-y-1 transition-all duration-500" strokeWidth={2} />
                     </div>
                 </div>
 
-                {/* Heading & Subtext */}
-                <div className="space-y-2">
-                    <p className="font-display font-bold text-2xl text-white tracking-tight">
+                {/* Main Text */}
+                <div className="space-y-3">
+                    <h3 className="font-display font-black text-[28px] sm:text-[32px] text-white tracking-tight leading-none">
                         {clickable ? "Click or drag to remove background" : "Drop image here"}
-                    </p>
+                    </h3>
 
-                    <p className="text-muted-foreground text-sm font-medium">
+                    <p className="text-[#a1a1aa] text-[15px] font-medium mt-2">
                         {clickable ? (
                             <>
-                                Or simply <span className="text-primary hover:underline underline-offset-4 transition-all decoration-primary/30">browse files</span>
+                                Or simply <span className="text-blue-400 font-semibold group-hover:text-blue-300 transition-colors">browse files</span>
                             </>
                         ) : (
                             "Support for JPG, PNG and WebP"
@@ -91,23 +97,23 @@ const UploadZone = ({ onFile, disabled = false, clickable = true }: UploadZonePr
                     </p>
                 </div>
 
-                {/* Metadata row */}
-                <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-white/5 border border-white/5 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-muted-foreground/60">
+                {/* Metadata Pill */}
+                <div className="mt-4 flex items-center justify-center gap-3 px-5 py-2 rounded-full bg-white/[0.03] border border-white/[0.05] text-[11px] font-bold uppercase tracking-[0.2em] text-[#71717a]">
                     <span>HD Quality</span>
-                    <span className="h-1 w-1 rounded-full bg-white/20" />
+                    <span className="h-1 w-1 rounded-full bg-[#3f3f46]" />
                     <span>Max 10MB</span>
-                    <span className="h-1 w-1 rounded-full bg-white/20" />
+                    <span className="h-1 w-1 rounded-full bg-[#3f3f46]" />
                     <span>Instant AI</span>
                 </div>
 
-                {/* Paste hint */}
+                {/* Keyboard Shortcut */}
                 {clickable && (
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Press</span>
-                        <kbd className="font-mono text-[10px] bg-white/10 border border-white/10 rounded px-1.5 py-0.5 text-white/90 shadow-sm">
+                    <div className="flex items-center gap-2 mt-2 opacity-60 group-hover:opacity-100 transition-opacity duration-500">
+                        <span className="text-[10px] text-[#71717a] uppercase tracking-widest font-bold">Press</span>
+                        <kbd className="font-mono text-[11px] font-semibold bg-white/[0.08] border border-white/[0.1] rounded-[4px] px-1.5 py-[1px] text-[#d4d4d8] shadow-sm">
                             Ctrl+V
                         </kbd>
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">to paste</span>
+                        <span className="text-[10px] text-[#71717a] uppercase tracking-widest font-bold">to paste</span>
                     </div>
                 )}
             </div>
@@ -124,7 +130,7 @@ const UploadZone = ({ onFile, disabled = false, clickable = true }: UploadZonePr
                     e.target.value = "";
                 }}
             />
-        </div>
+        </motion.div>
     );
 };
 

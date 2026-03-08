@@ -93,5 +93,6 @@ export default {
       },
     },
   },
+  // @ts-expect-error -- CJS plugin, Vite resolves at build time
   plugins: [require("tailwindcss-animate")],
 } satisfies Config;
