@@ -1,7 +1,7 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Crown, ArrowRight } from "lucide-react";
+import { Crown, ArrowRight, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/Logo";
 
@@ -18,6 +18,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = React.memo(({
     onToggleHistory,
     onUpgrade
 }) => {
+    const navigate = useNavigate();
     return (
         <header className="sticky top-0 z-50 glass border-b border-white/5 h-16">
             <div className="container mx-auto h-full flex items-center justify-between px-6">
@@ -70,7 +71,15 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = React.memo(({
                     </div>
                 </Link>
 
-                <div className="flex items-center">
+                <div className="flex items-center gap-6">
+                    <button
+                        onClick={() => navigate("/dashboard")}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-[10px] font-black text-[#a855f7] tracking-[0.15em] uppercase hover:bg-purple-500/20 transition-all shadow-[0_0_15px_rgba(168,85,247,0.15)] group"
+                    >
+                        <LayoutDashboard size={13} className="opacity-70 group-hover:opacity-100 transition-opacity" />
+                        Dashboard
+                    </button>
+
                     <button
                         onClick={onToggleHistory}
                         className={`text-[13px] font-black uppercase tracking-[0.15em] transition-colors ${activeState === 'history' ? 'text-[#e2e8f0]' : 'text-[#9ca3af] hover:text-[#d1d5db]'}`}

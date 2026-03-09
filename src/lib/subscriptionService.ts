@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { TOAST_MESSAGES } from '@/lib/toast-messages';
 
 export interface PaymentResult {
   success: boolean;
@@ -31,7 +32,7 @@ export const upgradeUserToPro = async (userId: string): Promise<PaymentResult> =
       return { success: false, error: error.message };
     }
 
-    toast.success('🎉 Welcome to Pro! Your subscription is now active!', {
+    toast.success(TOAST_MESSAGES.BILLING.PAYMENT_SUCCESS, {
       duration: 5000,
       description: 'Enjoy unlimited image processing and exclusive features.',
     });

@@ -11,6 +11,7 @@ import {
     Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+import { TOAST_MESSAGES } from "@/lib/toast-messages";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscriptionStore } from "@/store/subscriptionStore";
 
@@ -40,10 +41,10 @@ export const UserDropdown: React.FC<{ variant?: "navbar" | "dashboard" }> = ({
         setIsSigningOut(true);
         try {
             await signOut();
-            toast.success("Signed out successfully!");
+            toast.success(TOAST_MESSAGES.AUTH.LOGOUT);
             navigate("/login");
         } catch {
-            toast.error("Failed to sign out");
+            toast.error(TOAST_MESSAGES.ERROR.UNEXPECTED);
         } finally {
             setIsSigningOut(false);
             setIsOpen(false);

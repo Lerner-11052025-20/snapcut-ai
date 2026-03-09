@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, ArrowLeft, Trash2, Trash } from "lucide-react";
+import { Download, ArrowLeft, Trash2, Trash, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/Logo";
 
@@ -9,15 +10,19 @@ export interface HistoryItem {
     original: string;
     result: string;
     timestamp: string;
+    custom_name?: string;
+    processing_time_ms?: number;
+    download_count?: number;
 }
 
 interface HistoryViewProps {
     history: HistoryItem[];
-    onDownload: (url: string, filename: string) => void;
+    onDownload: (url: string, filename: string, id: string) => void;
     onRestore: (item: HistoryItem) => void;
     onReturn: () => void;
     onDelete?: (id: string) => void;
     onClearAll?: () => void;
+    onRename?: (id: string, name: string) => void;
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
@@ -27,9 +32,13 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
     onReturn,
     onDelete,
     onClearAll,
+    onRename,
 }) => {
-    const [confirmClear, setConfirmClear] = useState(false);
-    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [confirmClear, setConfirmClear] = React.useState(false);
+    const [deletingId, setDeletingId] = React.useState<string | null>(null);
+    const [editingId, setEditingId] = React.useState<string | null>(null);
+    const [editName, setEditName] = React.useState("");
+    const navigate = useNavigate();
 
     const handleDelete = (id: string) => {
         setDeletingId(id);
@@ -49,6 +58,24 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
         setConfirmClear(false);
     };
 
+    const startEditing = (item: HistoryItem) => {
+        setEditingId(item.id);
+        setEditName(item.custom_name || item.id);
+    };
+
+    const saveRename = () => {
+        if (editingId && editName.trim()) {
+            onRename?.(editingId, editName.trim());
+            setEditingId(null);
+        }
+    };
+
+    const avgTime = React.useMemo(() => {
+        const times = history.map(h => h.processing_time_ms).filter(Boolean) as number[];
+        if (times.length === 0) return 0;
+        return times.reduce((a, b) => a + b, 0) / times.length;
+    }, [history]);
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -59,9 +86,16 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-12 gap-6">
                 <div>
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-blue-500/10 border border-blue-500/20 mb-4 shadow-sm">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse drop-shadow-[0_0_5px_rgba(96,165,250,0.8)]" />
-                        <span className="text-[10px] font-black text-blue-400 tracking-[0.2em] uppercase leading-none mt-[1px]">Archive Database</span>
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-blue-500/10 border border-blue-500/20 shadow-sm">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse drop-shadow-[0_0_5px_rgba(96,165,250,0.8)]" />
+                            <span className="text-[10px] font-black text-blue-400 tracking-[0.2em] uppercase leading-none mt-[1px]">Archive Database</span>
+                        </div>
+                        {avgTime > 0 && (
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 shadow-sm">
+                                <span className="text-[10px] font-black text-emerald-400 tracking-[0.2em] uppercase leading-none mt-[1px]">Avg Sync: {(avgTime / 1000).toFixed(2)}s</span>
+                            </div>
+                        )}
                     </div>
                     <h1 className="text-4xl sm:text-5xl font-black font-display text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60 tracking-tighter drop-shadow-sm">Your Archives</h1>
                     <p className="text-[#a1a1aa] font-medium mt-2 text-sm sm:text-base">
@@ -90,6 +124,14 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
                     )}
                     <Button
                         variant="outline"
+                        className="rounded-[1rem] h-12 px-5 border-[#a855f7]/20 bg-[#a855f7]/5 hover:bg-[#a855f7]/15 font-bold text-[#c084fc] transition-all group shadow-[0_0_20px_rgba(168,85,247,0.05)]"
+                        onClick={() => navigate("/dashboard")}
+                    >
+                        <LayoutDashboard size={16} className="mr-2 opacity-70 group-hover:opacity-100 transition-opacity" />
+                        Dashboard
+                    </Button>
+                    <Button
+                        variant="outline"
                         className="rounded-[1rem] h-12 px-6 border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] font-bold text-white transition-colors"
                         onClick={onReturn}
                     >
@@ -108,13 +150,24 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
                     </div>
                     <h3 className="text-2xl font-black text-white mb-3 tracking-tight">No history found</h3>
                     <p className="text-[#a1a1aa] font-medium max-w-sm mx-auto mb-8 text-sm">Start by processing your first image to build your collection.</p>
-                    <Button
-                        size="xl"
-                        className="rounded-2xl px-10 bg-gradient-to-r from-[#60a5fa] via-[#7c3aed] to-[#c084fc] font-black tracking-wide text-white border-none shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:opacity-90 transition-all"
-                        onClick={onReturn}
-                    >
-                        Initialize Workspace
-                    </Button>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                        <Button
+                            size="xl"
+                            className="rounded-2xl px-10 bg-gradient-to-r from-[#60a5fa] via-[#7c3aed] to-[#c084fc] font-black tracking-wide text-white border-none shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:opacity-90 transition-all"
+                            onClick={onReturn}
+                        >
+                            Initialize Workspace
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="xl"
+                            className="rounded-2xl px-10 border-[#a855f7]/20 bg-[#a855f7]/5 hover:bg-[#a855f7]/15 font-black tracking-wide text-[#c084fc] transition-all group"
+                            onClick={() => navigate("/dashboard")}
+                        >
+                            <LayoutDashboard size={20} className="mr-3 opacity-70 group-hover:opacity-100 transition-opacity" />
+                            Go to Dashboard
+                        </Button>
+                    </div>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -144,7 +197,7 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
                                         <div className="absolute inset-0 flex items-center justify-center p-4">
                                             <img
                                                 src={item.result}
-                                                alt={`History item ${i + 1}`}
+                                                alt={item.custom_name || `History item ${i + 1}`}
                                                 className="relative z-10 max-h-full max-w-full object-contain filter drop-shadow-xl transition-transform duration-700 group-hover:scale-[1.05]"
                                                 loading="lazy"
                                             />
@@ -156,7 +209,7 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
                                             <button
                                                 title="Download"
                                                 className="h-11 w-11 rounded-full border-none bg-gradient-to-r from-[#60a5fa] to-[#c084fc] shadow-[0_0_20px_rgba(124,58,237,0.4)] flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-transform duration-300"
-                                                onClick={(e) => { e.stopPropagation(); onDownload(item.result, `snapcut-${item.id}.png`); }}
+                                                onClick={(e) => { e.stopPropagation(); onDownload(item.result, `${item.custom_name || 'snapcut'}.png`, item.id); }}
                                             >
                                                 <Download size={18} strokeWidth={2.5} />
                                             </button>
@@ -188,9 +241,38 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
                                 <div className="p-5 pt-2">
                                     <div className="flex items-center justify-between mb-1">
                                         <p className="text-[10px] font-black text-[#71717a] uppercase tracking-widest truncate pr-2">{item.timestamp}</p>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-[#34d399] flex-shrink-0" />
+                                        <div className="flex items-center gap-2">
+                                            {item.processing_time_ms && (
+                                                <span className="text-[10px] font-bold text-blue-400/60">{(item.processing_time_ms / 1000).toFixed(1)}s</span>
+                                            )}
+                                            <div className="w-1.5 h-1.5 rounded-full bg-[#34d399] flex-shrink-0" />
+                                        </div>
                                     </div>
-                                    <p className="text-[11px] text-white/40 font-mono truncate">ID: {item.id.slice(-8)}</p>
+
+                                    {editingId === item.id ? (
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <input
+                                                autoFocus
+                                                value={editName}
+                                                onChange={(e) => setEditName(e.target.value)}
+                                                onBlur={saveRename}
+                                                onKeyDown={(e) => e.key === 'Enter' && saveRename()}
+                                                className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white outline-none w-full"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="flex items-center justify-between group/name cursor-pointer mt-1"
+                                            onClick={() => startEditing(item)}
+                                        >
+                                            <p className="text-[12px] font-bold text-white/80 group-hover/name:text-[#60a5fa] transition-colors truncate">
+                                                {item.custom_name || `Snapshot ${item.id.slice(-4)}`}
+                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-medium text-white/20">↓{item.download_count || 0}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         ))}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { getAllHistory, migrateFromLocalStorage } from "@/lib/historyDB";
+import { getCloudHistory } from "@/lib/cloudHistory";
 import { motion } from "framer-motion";
 import {
     LayoutDashboard,
@@ -16,7 +17,8 @@ import {
     ChevronRight,
     Sparkles,
     Crown,
-    ArrowRight
+    ArrowRight,
+    LogOut
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -30,40 +32,69 @@ interface HistoryItem {
     original: string;
     result: string;
     timestamp: string;
+    custom_name?: string;
+    processing_time_ms?: number;
+    download_count?: number;
 }
 
 const Dashboard = () => {
     const navigate = useNavigate();
-    useAuth();
+    const { user, profile, signOut } = useAuth();
     const isPro = useSubscriptionStore((state) => state.isPro);
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [activeTab, setActiveTab] = useState("dashboard");
 
     const loadHistory = useCallback(async () => {
         await migrateFromLocalStorage();
-        const items = await getAllHistory();
-        const cleaned = items.filter(item => item.result && !item.result.startsWith("blob:"));
-        setHistory(cleaned);
-    }, []);
+        const localItems = await getAllHistory();
+
+        let cloudItems: any[] = [];
+        if (user) {
+            cloudItems = await getCloudHistory();
+        }
+
+        const formattedCloud: HistoryItem[] = cloudItems.map(c => ({
+            id: c.id,
+            original: c.original_url || "",
+            result: c.result_url,
+            timestamp: new Date(c.timestamp).toLocaleString(),
+            custom_name: c.custom_name,
+            processing_time_ms: c.processing_time_ms,
+            download_count: c.download_count
+        }));
+
+        const combined = [...formattedCloud, ...localItems];
+        const itemsByResult = new Map();
+        combined.forEach(item => {
+            if (!itemsByResult.has(item.result)) {
+                itemsByResult.set(item.result, item);
+            }
+        });
+
+        const activeItems = Array.from(itemsByResult.values())
+            .filter(i => i.result && !i.result.startsWith("blob:"));
+
+        setHistory(activeItems);
+    }, [user]);
 
     useEffect(() => {
         loadHistory();
-    }, [loadHistory]);
+    }, [loadHistory, user]);
 
     const stats = useMemo((): { label: string; value: string | number; icon: React.ReactNode; trend: string; trendColor: string }[] => [
         {
             label: "Images Processed",
             value: history.length,
             icon: <ImageIcon className="text-blue-400" size={20} />,
-            trend: "+12%",
+            trend: history.length > 0 ? "Active" : "New",
             trendColor: "text-green-400"
         },
         {
             label: "Credits Remaining",
-            value: "3",
+            value: profile?.credits_remaining ?? 0,
             icon: <Zap className="text-yellow-400" size={20} />,
-            trend: "Low",
-            trendColor: "text-red-400"
+            trend: (profile?.credits_remaining ?? 0) < 5 ? "Low" : "Valid",
+            trendColor: (profile?.credits_remaining ?? 0) < 5 ? "text-red-400" : "text-green-400"
         },
         {
             label: "This Month",
@@ -72,17 +103,19 @@ const Dashboard = () => {
                 return date.getMonth() === new Date().getMonth();
             }).length,
             icon: <TrendingUp className="text-purple-400" size={20} />,
-            trend: "+8%",
+            trend: "Growth",
             trendColor: "text-green-400"
         },
         {
             label: "Avg. Time",
-            value: "0.8s",
+            value: (history.length > 0 && (history[0] as any).processing_time_ms)
+                ? (history.reduce((acc, curr: any) => acc + (curr.processing_time_ms || 0), 0) / history.length / 1000).toFixed(1) + 's'
+                : "0s",
             icon: <Clock className="text-emerald-400" size={20} />,
-            trend: "-0.2s",
+            trend: "Optimal",
             trendColor: "text-green-400"
         }
-    ], [history]);
+    ], [history, profile]);
 
     const sidebarLinks = useMemo(() => [
         { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
@@ -105,7 +138,7 @@ const Dashboard = () => {
     } as const;
 
     return (
-        <div className="min-h-screen bg-[#020617] text-white flex overflow-hidden relative">
+        <div className="h-screen bg-[#020617] text-white flex overflow-hidden relative">
 
             {/* ── SAAS BACKGROUND ── */}
             <div className="fixed inset-0 pointer-events-none z-0">
@@ -115,7 +148,7 @@ const Dashboard = () => {
             </div>
 
             {/* ─── SIDEBAR ────────────────────────────────────────── */}
-            <aside className="w-[300px] bg-[#050508]/80 backdrop-blur-3xl border-r border-white/[0.05] flex flex-col flex-shrink-0 hidden lg:flex relative z-20 shadow-[10px_0_30px_rgba(0,0,0,0.4)]">
+            <aside className="w-[300px] h-screen sticky top-0 bg-[#050508]/80 backdrop-blur-3xl border-r border-white/[0.05] flex flex-col flex-shrink-0 hidden lg:flex z-20 shadow-[10px_0_30px_rgba(0,0,0,0.4)]">
                 <div className="p-6">
                     <Link to="/" className="group flex items-center gap-3.5 cursor-pointer hover:bg-white/[0.02] p-2.5 rounded-2xl transition-all duration-300 relative">
                         <div className="relative flex-shrink-0">
@@ -144,7 +177,7 @@ const Dashboard = () => {
                     </Link>
                 </div>
 
-                <nav className="flex-1 px-4 space-y-2 mt-4">
+                <nav className="flex-1 px-4 space-y-1 mt-2 overflow-y-auto overflow-x-hidden custom-scrollbar pb-10">
                     {sidebarLinks.map((link) => (
                         <button
                             key={link.id}
@@ -152,7 +185,7 @@ const Dashboard = () => {
                                 setActiveTab(link.id);
                                 if (link.path.startsWith('/')) navigate(link.path);
                             }}
-                            className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-[13px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === link.id
+                            className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-[13px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === link.id
                                 ? "bg-gradient-to-r from-blue-500/10 to-purple-500/10 text-white shadow-[inset_0_0_20px_rgba(124,58,237,0.1)] border border-white/[0.05] drop-shadow-sm"
                                 : "text-[#71717a] hover:text-white hover:bg-white/[0.04] border border-transparent"
                                 }`}
@@ -165,9 +198,10 @@ const Dashboard = () => {
                     ))}
                 </nav>
 
-                <div className="p-6">
+                {/* ── SIDEBAR FOOTER (Pinned to Bottom) ────────────────── */}
+                <div className="flex-shrink-0 border-t border-white/[0.05] p-6 space-y-6 bg-[#050508]/40 backdrop-blur-md">
                     {isPro ? (
-                        /* PRO USER */
+                        /* PRO USER CARD */
                         <div className="glass rounded-[2rem] p-6 border-[#6b582b]/50 bg-[#35342a]/80 backdrop-blur-xl relative overflow-hidden shadow-[0_0_30px_rgba(250,204,21,0.05)] text-left">
                             <div className="absolute top-0 right-0 p-4 opacity-10">
                                 <Crown size={64} className="text-[#fcd34d]" />
@@ -181,7 +215,7 @@ const Dashboard = () => {
                             </div>
                         </div>
                     ) : (
-                        /* FREE USER */
+                        /* FREE USER CARD */
                         <div className="glass rounded-[2rem] p-6 border-white/[0.05] bg-[#0a0a0f]/80 backdrop-blur-xl relative overflow-hidden group shadow-[0_0_20px_rgba(0,0,0,0.5)] text-left">
                             <div className="absolute top-0 right-0 p-4 opacity-5">
                                 <Sparkles size={64} className="text-white" />
@@ -191,16 +225,45 @@ const Dashboard = () => {
                                     <Zap size={20} className="text-[#a855f7]" />
                                 </div>
                                 <h4 className="font-black text-[13px] mb-1 uppercase tracking-widest text-white/80">Free Plan</h4>
-                                <p className="text-[11px] text-[#71717a] font-medium mb-4">Limited daily credits</p>
+                                <p className="text-[11px] text-[#71717a] font-medium mb-4">{profile?.credits_remaining ?? 0} credits left</p>
                                 <Button variant="hero" size="sm" className="w-full rounded-xl text-[10px] font-black uppercase tracking-[0.2em] bg-gradient-to-r from-[#60a5fa] via-[#7c3aed] to-[#c084fc] border-none shadow-[0_0_15px_rgba(124,58,237,0.3)] hover:opacity-90" asChild>
-                                    <Link to="/#pricing">Upgrade Status</Link>
+                                    <Link to="/#pricing">Upgrade to Pro</Link>
                                 </Button>
                             </div>
                         </div>
                     )}
+
+                    {/* USER PROFILE SECTION - CLICKABLE */}
+                    <div className="flex items-center justify-between group/user pt-2">
+                        <div
+                            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => navigate("/profile")}
+                        >
+                            <div className="h-11 w-11 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-sm border-2 border-white/10 shadow-lg">
+                                {profile?.full_name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || user?.email?.[0].toUpperCase()}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-[13px] font-black text-white truncate max-w-[140px] leading-tight">
+                                    {profile?.full_name || "User Account"}
+                                </span>
+                                <span className="text-[11px] font-medium text-[#71717a] truncate max-w-[140px]">
+                                    {user?.email}
+                                </span>
+                            </div>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                await signOut();
+                                navigate("/login");
+                            }}
+                            className="h-9 w-9 flex items-center justify-center rounded-xl text-[#71717a] hover:text-red-400 hover:bg-red-500/10 transition-all duration-300"
+                            title="Sign Out"
+                        >
+                            <LogOut size={18} strokeWidth={2.5} />
+                        </button>
+                    </div>
                 </div>
             </aside>
-
             {/* ─── MAIN CONTENT ─────────────────────────────────── */}
             <main className="flex-1 flex flex-col overflow-y-auto relative z-10 w-full max-w-full">
                 {/* Header */}
@@ -335,7 +398,9 @@ const Dashboard = () => {
                                                                 <img src={item.result} alt="Product" className="h-full w-full object-contain filter drop-shadow-md group-hover:scale-110 transition-transform duration-500" />
                                                             </div>
                                                         </div>
-                                                        <span className="text-[12px] font-black text-white/80 font-mono tracking-tight group-hover:text-white transition-colors">snap_{item.id.slice(-6)}.png</span>
+                                                        <span className="text-[12px] font-black text-white/80 font-mono tracking-tight group-hover:text-white transition-colors">
+                                                            {item.custom_name || `snap_${item.id.slice(-6)}.png`}
+                                                        </span>
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-5">
@@ -376,7 +441,7 @@ const Dashboard = () => {
                     </motion.section>
                 </motion.div>
             </main>
-        </div>
+        </div >
     );
 };
 

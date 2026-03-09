@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from "react";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
+import { TOAST_MESSAGES } from "@/lib/toast-messages";
 import { motion } from "framer-motion";
 
 interface UploadZoneProps {
@@ -17,11 +18,11 @@ const UploadZone = ({ onFile, disabled = false, clickable = true }: UploadZonePr
         (file: File) => {
             if (disabled) return;
             if (file.size > 10 * 1024 * 1024) {
-                toast.error("File too large. Max 10MB.");
+                toast.error(TOAST_MESSAGES.PROCESSING.FILE_TOO_LARGE);
                 return;
             }
             if (!file.type.startsWith("image/")) {
-                toast.error("Please upload an image file.");
+                toast.error(TOAST_MESSAGES.PROCESSING.INVALID_FILE_TYPE);
                 return;
             }
             onFile(file);

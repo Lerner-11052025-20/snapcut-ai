@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { TOAST_MESSAGES } from "@/lib/toast-messages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -75,7 +76,7 @@ const ProfilePage = () => {
                 setShowSuccessToken(false);
             }, 3500);
         } catch (error: any) {
-            toast.error(error.message || "Failed to update profile");
+            toast.error(error.message || TOAST_MESSAGES.ERROR.UNEXPECTED);
         } finally {
             setIsUpdating(false);
         }
@@ -86,7 +87,7 @@ const ProfilePage = () => {
         if (!file || !user) return;
 
         if (file.size > 2 * 1024 * 1024) {
-            toast.error("Avatar must be less than 2MB");
+            toast.error(TOAST_MESSAGES.PROCESSING.FILE_TOO_LARGE);
             return;
         }
 
@@ -113,9 +114,9 @@ const ProfilePage = () => {
             if (updateError) throw updateError;
 
             await refreshProfile();
-            toast.success("Avatar updated!");
+            toast.success(TOAST_MESSAGES.SETTINGS.PROFILE_UPDATED);
         } catch (error: any) {
-            toast.error(error.message || "Failed to upload avatar");
+            toast.error(error.message || TOAST_MESSAGES.ERROR.UNEXPECTED);
         } finally {
             setIsUploading(false);
         }

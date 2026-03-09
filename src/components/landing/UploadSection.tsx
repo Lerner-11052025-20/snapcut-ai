@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { TOAST_MESSAGES } from "@/lib/toast-messages";
 import UploadZone from "@/components/UploadZone";
 
 const UploadSection = () => {
@@ -16,7 +17,7 @@ const UploadSection = () => {
             } catch {
                 // Handle gracefully
             }
-            toast.success("Intelligence Hub warming up...");
+            toast.success(TOAST_MESSAGES.PROCESSING.STARTED);
             navigate("/upload");
         };
         reader.readAsDataURL(file);

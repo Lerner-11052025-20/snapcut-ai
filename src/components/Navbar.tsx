@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Crown } from "lucide-react";
+import { Menu, X, Crown, LayoutDashboard } from "lucide-react";
 import Logo from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserDropdown } from "@/components/UserDropdown";
@@ -156,6 +156,13 @@ const Navbar = () => {
             {!loading && (
               isAuthenticated ? (
                 <div className="flex items-center gap-4">
+                  <Link
+                    to="/dashboard"
+                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-[10px] font-black text-[#a855f7] tracking-[0.15em] uppercase hover:bg-purple-500/20 transition-all shadow-[0_0_15px_rgba(168,85,247,0.15)] group"
+                  >
+                    <LayoutDashboard size={12} className="opacity-70 group-hover:opacity-100 transition-opacity" />
+                    Dashboard
+                  </Link>
                   <Link
                     to="/upload?tab=history"
                     className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-black text-[#60a5fa] tracking-[0.15em] uppercase hover:bg-blue-500/20 transition-all shadow-[0_0_10px_rgba(59,130,246,0.1)]"

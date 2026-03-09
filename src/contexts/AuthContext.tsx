@@ -11,6 +11,7 @@ interface UserProfile {
     avatar_url: string | null;
     subscription_tier: 'free' | 'pro' | 'enterprise' | null;
     subscription_ends_at: string | null;
+    credits_remaining: number;
 }
 
 interface AuthContextType {
@@ -21,7 +22,9 @@ interface AuthContextType {
     isPro: boolean;
     signUp: (email: string, password: string, fullName: string) => Promise<{ success: boolean; error?: string }>;
     signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+    signInWithGoogle: () => Promise<void>;
     signOut: () => Promise<void>;
+    useCredits: (count: number) => Promise<{ success: boolean; error?: string }>;
     isAuthenticated: boolean;
     refreshProfile: () => Promise<void>;
     markAsPro: () => void; // Force-set PRO immediately in UI state + localStorage
@@ -47,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('full_name, email, avatar_url, subscription_tier')
+                .select('full_name, email, avatar_url, subscription_tier, credits_remaining')
                 .eq('id', userId)
                 .single();
 
@@ -74,12 +77,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     effectiveTier === 'pro' || effectiveTier === 'enterprise' ? 'PRO' : 'FREE'
                 );
 
+                // 🛠️ AUTO-HEAL: If user is Pro but has 0 credits (e.g., from a failed migration or previous tier),
+                // we automatically restore them to 100.
+                let finalCredits = data.credits_remaining ?? (effectiveTier === 'pro' ? 100 : 2);
+
+                if (effectiveTier === 'pro' && finalCredits <= 0) {
+                    finalCredits = 100;
+                    // Sync back to DB silently
+                    supabase.from('profiles')
+                        .update({ credits_remaining: 100 })
+                        .eq('id', userId_local)
+                        .then(({ error }) => {
+                            if (error) console.error("[Auth] Auto-heal sync failed:", error);
+                        });
+                }
+
                 setProfile({
                     full_name: data.full_name || currentUser?.user_metadata?.full_name || null,
                     email: data.email || null,
                     avatar_url: data.avatar_url || currentUser?.user_metadata?.avatar_url || null,
                     subscription_tier: effectiveTier as any,
                     subscription_ends_at: null,
+                    credits_remaining: finalCredits,
                 });
             }
         } catch (error) {
@@ -104,12 +123,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
      * This works even if the DB update fails due to RLS.
      * The DB will be synced when the Edge Function is deployed.
      */
-    const markAsPro = useCallback(() => {
-        if (user?.id) {
-            // Persist to localStorage so it survives page reloads
-            localStorage.setItem(`${PRO_CACHE_KEY}_${user.id}`, 'pro');
+    const markAsPro = useCallback(async () => {
+        if (!user?.id) return;
+
+        // 1. Local Cache (Survivability)
+        localStorage.setItem(`${PRO_CACHE_KEY}_${user.id}`, 'pro');
+
+        // 2. Persistent Supabase Update (Cloud)
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    subscription_tier: 'pro',
+                    credits_remaining: 100
+                })
+                .eq('id', user.id);
+
+            if (error) console.error('Cloud upgrade failed:', error);
+        } catch (err) {
+            console.error('Runtime error during cloud upgrade:', err);
         }
-        // Update local state immediately — no DB round-trip needed
+
+        // 3. Reactive UI Updates
         setProfile((prev) => {
             if (!prev) {
                 return {
@@ -118,9 +153,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     avatar_url: null,
                     subscription_tier: 'pro',
                     subscription_ends_at: null,
+                    credits_remaining: 100,
                 };
             }
-            return { ...prev, subscription_tier: 'pro' };
+            return {
+                ...prev,
+                subscription_tier: 'pro',
+                credits_remaining: 100
+            };
         });
 
         // 👑 Update global state store (Zustand)
@@ -128,50 +168,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [user]);
 
     useEffect(() => {
+        let mounted = true;
+
         const initAuth = async () => {
             try {
-                const { data } = await supabase.auth.getSession();
-                const currentUser = data.session?.user ?? null;
-                setSession(data.session);
-                setUser(currentUser);
+                // Get session exactly once on mount
+                const { data: { session: initialSession }, error } = await supabase.auth.getSession();
 
-                // Fetch profile in background — DON'T block loading state on it
-                if (currentUser) {
-                    // 👑 HYDRATE ZUSTAND IMMEDIATELY FROM CACHE
+                if (!mounted) return;
+
+                if (initialSession) {
+                    setSession(initialSession);
+                    const currentUser = initialSession.user;
+                    setUser(currentUser);
+
+                    // Pre-Hydrate Zustand from LocalCache for instant UI speed
                     const cachedPro = localStorage.getItem(`${PRO_CACHE_KEY}_${currentUser.id}`);
                     if (cachedPro === 'pro') {
                         useSubscriptionStore.getState().markAsPro();
                     }
 
-                    fetchProfile(currentUser.id, currentUser); // intentionally no await
+                    // Fetch full profile data
+                    fetchProfile(currentUser.id, currentUser);
                 }
             } catch (error) {
-                console.error('Error initializing auth:', error);
+                console.error('⚠️ [Auth] Init failed:', error);
             } finally {
-                // Resolve loading FAST — UI never freezes
-                setLoading(false);
+                if (mounted) setLoading(false);
             }
         };
 
         initAuth();
 
-        // Auth state listener — must NOT be async (Supabase restriction)
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (!mounted) return;
+
+            console.log(`📍 [Auth] Event: ${event}`);
             setSession(session);
             const currentUser = session?.user ?? null;
             setUser(currentUser);
 
             if (currentUser) {
-                setTimeout(() => fetchProfile(currentUser.id, currentUser), 0);
+                // Use a slight delay to avoid Auth lock contention
+                const timer = setTimeout(() => fetchProfile(currentUser.id, currentUser), 100);
+                return () => clearTimeout(timer);
             } else {
                 setProfile(null);
                 profileFetchRef.current = null;
+                useSubscriptionStore.getState().setPlan('FREE');
             }
         });
 
         return () => {
+            mounted = false;
             subscription?.unsubscribe();
         };
     }, [fetchProfile]);
@@ -232,6 +281,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             id: data.user.id,
                             full_name: fullName,
                             email: email,
+                            credits_remaining: 2, // 2 Free Credits for signup
                             updated_at: new Date().toISOString(),
                         },
                     ]);
@@ -257,6 +307,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return { success: true };
         } catch (error) {
             return { success: false, error: String(error) };
+        }
+    };
+
+    const useCredits = async (count: number): Promise<{ success: boolean; error?: string }> => {
+        if (!user || !profile) return { success: false, error: "Authentication required" };
+
+        const newCredits = Math.max(0, profile.credits_remaining - count);
+
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ credits_remaining: newCredits })
+                .eq('id', user.id);
+
+            if (error) throw error;
+
+            setProfile(prev => prev ? { ...prev, credits_remaining: newCredits } : null);
+            return { success: true };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    };
+
+    const signInWithGoogle = async () => {
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/dashboard`,
+                }
+            });
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error signing in with Google:', error);
+            throw error;
         }
     };
 
@@ -294,7 +379,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isPro,
         signUp,
         signIn,
+        signInWithGoogle,
         signOut,
+        useCredits,
         isAuthenticated: !!user,
         refreshProfile,
         markAsPro,
@@ -307,6 +394,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUp,
         signIn,
         signOut,
+        useCredits,
         refreshProfile,
         markAsPro
     ]);
