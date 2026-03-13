@@ -208,6 +208,21 @@ const UploadWorkspace = () => {
 
       if (!resultUrl) throw new Error("No image data received");
 
+      // For display, we create a local blob to bypass browser tracking prevention/CORS
+      let displayUrl = resultUrl;
+      if (resultUrl.startsWith("http")) {
+        try {
+          // Convert remote Cloudinary URL to local Blob URL to bypass tracking prevention/CORS
+          const proxyResponse = await fetch(resultUrl);
+          if (proxyResponse.ok) {
+            const proxyBlob = await proxyResponse.blob();
+            displayUrl = URL.createObjectURL(proxyBlob);
+          }
+        } catch (e) {
+          console.warn("Image proxy failed, using direct URL", e);
+        }
+      }
+
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
 
@@ -222,9 +237,9 @@ const UploadWorkspace = () => {
         console.error("[Pipeline] Credit runtime error:", err);
       });
 
-      setResult(resultUrl);
+      setResult(displayUrl);
 
-      // ☁️ Save to history (Async/Non-blocking failsafe)
+      // ☁️ Save to history (Async/Non-blocking failsafe) - use the permanent URL, not the blob
       saveToHistory(base64, resultUrl, duration);
 
       setState("done");

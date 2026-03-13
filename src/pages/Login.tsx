@@ -49,8 +49,15 @@ const Login = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, isAuthenticated, loading } = useAuth();
   const emailRef = useRef<HTMLInputElement>(null);
+
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   // Auto-focus email on mount
   useEffect(() => {
@@ -60,10 +67,24 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error(TOAST_MESSAGES.AUTH.INVALID_CREDS);
+    
+    // Validate inputs
+    if (!email) {
+      toast.error("Please enter your email address");
       return;
     }
+    if (!password) {
+      toast.error("Please enter your password");
+      return;
+    }
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    
     setIsLoading(true);
     const result = await signIn(email, password);
     if (result.success) {
@@ -73,7 +94,16 @@ const Login = () => {
         navigate("/dashboard");
       }, 2000);
     } else {
-      toast.error(result.error || TOAST_MESSAGES.ERROR.UNEXPECTED);
+      // Provide more specific error messages
+      let errorMsg = result.error || TOAST_MESSAGES.ERROR.UNEXPECTED;
+      if (errorMsg.includes("Invalid login credentials")) {
+        errorMsg = "Invalid email or password. Please try again.";
+      } else if (errorMsg.includes("Email not confirmed")) {
+        errorMsg = "Please verify your email before logging in.";
+      } else if (errorMsg.includes("network") || errorMsg.includes("Network")) {
+        errorMsg = TOAST_MESSAGES.ERROR.NETWORK;
+      }
+      toast.error(errorMsg);
       setIsLoading(false);
     }
   };
@@ -83,7 +113,12 @@ const Login = () => {
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      toast.error(error.message || TOAST_MESSAGES.ERROR.SERVER);
+      console.error("[Login] Google sign-in error:", error);
+      let errorMsg = error.message || TOAST_MESSAGES.ERROR.SERVER;
+      if (errorMsg.includes("network") || errorMsg.includes("Network")) {
+        errorMsg = TOAST_MESSAGES.ERROR.NETWORK;
+      }
+      toast.error(errorMsg);
       setIsLoading(false);
     }
   };

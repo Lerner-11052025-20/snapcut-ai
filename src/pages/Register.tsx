@@ -70,8 +70,15 @@ const Register = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { signUp, signInWithGoogle } = useAuth();
+  const { signUp, signInWithGoogle, isAuthenticated, loading } = useAuth();
   const nameRef = useRef<HTMLInputElement>(null);
+
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   useEffect(() => {
     const t = setTimeout(() => nameRef.current?.focus(), 600);
@@ -85,8 +92,34 @@ const Register = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) { toast.error(TOAST_MESSAGES.ERROR.UNEXPECTED); return; }
-    if (password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    
+    // Validate inputs
+    if (!name.trim()) {
+      toast.error("Please enter your full name");
+      return;
+    }
+    if (!email.trim()) {
+      toast.error("Please enter your email address");
+      return;
+    }
+    if (!password) {
+      toast.error("Please enter a password");
+      return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    
+    // Validate password length
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    
     setIsLoading(true);
     try {
       const result = await signUp(email, password, name);
@@ -99,7 +132,14 @@ const Register = () => {
           navigate("/login");
         }, 3000);
       } else {
-        toast.error(result.error || TOAST_MESSAGES.ERROR.SERVER);
+        // Provide more specific error messages
+        let errorMsg = result.error || TOAST_MESSAGES.ERROR.SERVER;
+        if (errorMsg.includes("already registered") || errorMsg.includes("User already exists")) {
+          errorMsg = "This email is already registered. Please log in or use a different email.";
+        } else if (errorMsg.includes("network") || errorMsg.includes("Network")) {
+          errorMsg = TOAST_MESSAGES.ERROR.NETWORK;
+        }
+        toast.error(errorMsg);
         setIsLoading(false);
       }
     } catch (err) {
@@ -114,7 +154,12 @@ const Register = () => {
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      toast.error(error.message || TOAST_MESSAGES.ERROR.SERVER);
+      console.error("[Register] Google sign-up error:", error);
+      let errorMsg = error.message || TOAST_MESSAGES.ERROR.SERVER;
+      if (errorMsg.includes("network") || errorMsg.includes("Network")) {
+        errorMsg = TOAST_MESSAGES.ERROR.NETWORK;
+      }
+      toast.error(errorMsg);
       setIsLoading(false);
     }
   };

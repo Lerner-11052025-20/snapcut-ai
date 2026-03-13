@@ -83,6 +83,7 @@ export const ResultView: React.FC<ResultViewProps> = React.memo(({
                                 animate={{ opacity: 1, x: 0, scale: 1 }}
                                 transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
                                 src={result}
+                                crossOrigin="anonymous"
                                 alt="Background Removed Result"
                                 className="relative z-10 max-h-full max-w-full object-contain filter drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)]"
                             />

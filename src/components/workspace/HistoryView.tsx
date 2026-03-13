@@ -197,6 +197,7 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
                                         <div className="absolute inset-0 flex items-center justify-center p-4">
                                             <img
                                                 src={item.result}
+                                                crossOrigin="anonymous"
                                                 alt={item.custom_name || `History item ${i + 1}`}
                                                 className="relative z-10 max-h-full max-w-full object-contain filter drop-shadow-xl transition-transform duration-700 group-hover:scale-[1.05]"
                                                 loading="lazy"

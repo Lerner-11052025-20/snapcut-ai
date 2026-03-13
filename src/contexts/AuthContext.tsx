@@ -270,7 +270,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 options: { data: { full_name: fullName } },
             });
 
-            if (signUpError) return { success: false, error: signUpError.message };
+            if (signUpError) {
+                console.error('[Auth] SignUp error:', signUpError);
+                return { success: false, error: signUpError.message };
+            }
 
             if (data.user) {
                 // We use a try-catch specifically for the profile insert 
@@ -295,18 +298,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             return { success: true };
-        } catch (error) {
-            return { success: false, error: String(error) };
+        } catch (error: any) {
+            console.error('[Auth] SignUp exception:', error);
+            return { success: false, error: error.message || 'An unexpected error occurred during registration.' };
         }
     };
 
     const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         try {
             const { error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) return { success: false, error: error.message };
+            if (error) {
+                console.error('[Auth] SignIn error:', error);
+                return { success: false, error: error.message };
+            }
             return { success: true };
-        } catch (error) {
-            return { success: false, error: String(error) };
+        } catch (error: any) {
+            console.error('[Auth] SignIn exception:', error);
+            return { success: false, error: error.message || 'An unexpected error occurred during login.' };
         }
     };
 
@@ -338,10 +346,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     redirectTo: `${window.location.origin}/dashboard`,
                 }
             });
-            if (error) throw error;
-        } catch (error) {
-            console.error('Error signing in with Google:', error);
-            throw error;
+            if (error) {
+                console.error('[Auth] Google OAuth error:', error);
+                throw error;
+            }
+        } catch (error: any) {
+            console.error('[Auth] Google sign-in error:', error);
+            throw new Error(error.message || 'Failed to sign in with Google. Please try again.');
         }
     };
 
